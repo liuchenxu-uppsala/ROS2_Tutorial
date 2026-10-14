@@ -1,0 +1,19 @@
+# ===== colcon 编译生成的（随时可以重新编出来，不上传）=====
+build/
+install/
+log/
+
+# ===== Python 运行时自动生成的缓存 =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ===== VS Code 个人设置（每台电脑的路径不一样）=====
+# 如果想把 .vscode/settings.json 分享给别人，删掉下面这一行
+.vscode/
+
+# ===== 编辑器 / 系统临时文件 =====
+*.swp
+*~
+.DS_Store
