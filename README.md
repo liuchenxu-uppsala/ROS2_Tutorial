@@ -11,7 +11,8 @@ My ROS 2 learning notes and practice code, following Seeed Studio's ROS 2 beginn
 |---|---|---|
 | 1 | [`HelloWorld`](HelloWorld) | 第一个 Python 节点 |
 | 2 | [`2_CountDown`](2_CountDown) | 自定义 Action：倒计时 |
-| 3 | [`3_Communication_Srv`](3_Communication_Srv) | 话题、自定义服务 AddTwoInts |
+| 3 | [`3_Communication_Topic`](3_Communication_Topic) | 话题：发布者 + 订阅者 |
+| 3 | [`3_Communication_Srv`](3_Communication_Srv) | 服务：自定义 AddTwoInts |
 
 ---
 
@@ -68,15 +69,46 @@ ros2 run action_demo_py countdown_client
 
 ## 3 · 话题与服务
 
+### 话题（`3_Communication_Topic`）
+
+![Topic](3_Communication_Topic/topic.png)
+
+```python
+from std_msgs.msg import String
+
+# 发布者：每 0.5 秒发一条
+self.publisher_ = self.create_publisher(String, 'publish_py', 10)   # 类型、话题名、队列长度
+self.timer = self.create_timer(0.5, self.timer_callback)
+
+def timer_callback(self):                       # 定时器回调：不收参数
+    msg = String()
+    msg.data = f'Hello {self.count}'
+    self.publisher_.publish(msg)
+
+# 订阅者
+self.create_subscription(String, 'publish_py', self.subscribe_callback, 10)
+
+def subscribe_callback(self, msg: String):      # 收到一条消息调用一次
+    self.get_logger().info(f'收到: {msg.data}')
+```
+
+- 两端的**话题名和类型必须一致**，靠名字自动连上
+- `publish()` 发完立刻返回，**不等订阅者**
+- 队列长度 10：每个订阅者有自己的队列，处理不过来就丢最旧的，互不影响
+- `create_timer` 一创建就开始计时，但回调只在 spin 时才会被调用
+
+```bash
+ros2 topic list
+ros2 topic echo /publish_py                                   # 看话题上的数据
+ros2 topic info /publish_py                                   # 发布者、订阅者各几个
+ros2 topic pub /publish_py std_msgs/msg/String "{data: hi}"   # 不写发布者也能测订阅者
+```
+
+### 服务（`3_Communication_Srv`）
+
 ![Service](3_Communication_Srv/3_service_client_server.png)
 
-**话题**
-
-- `create_publisher(String, 'topic', 10)`：10 是队列长度；`publish()` 发完就返回，不等订阅者
-- 每个订阅者有自己的队列，处理不过来就丢最旧的
-- `create_timer(0.5, cb)`：每 0.5 秒调用一次，但只有在 spin 时才会调用
-
-**服务**：`tutorial_interfaces/srv/AddTwoInts`（`int64 a, b --- int64 sum`）+ `py_service_pkg`
+接口 `tutorial_interfaces/srv/AddTwoInts`（`int64 a, b --- int64 sum`），代码包 `py_service_pkg`。
 
 ```python
 # 服务端
