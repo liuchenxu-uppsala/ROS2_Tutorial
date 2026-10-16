@@ -10,9 +10,10 @@ My ROS 2 learning notes and practice code, following Seeed Studio's ROS 2 beginn
 | 课 | 文件夹 | 内容 |
 |---|---|---|
 | 1 | [`HelloWorld`](HelloWorld) | 第一个 Python 节点 |
-| 2 | [`2_CountDown`](2_CountDown) | 自定义 Action：倒计时 |
+| 2 | [`2_CountDown_Action`](2_CountDown_Action) | 自定义 Action：倒计时 |
 | 3 | [`3_Communication_Topic`](3_Communication_Topic) | 话题：发布者 + 订阅者 |
 | 3 | [`3_Communication_Srv`](3_Communication_Srv) | 服务：自定义 AddTwoInts |
+| 3 | [`3_Communication_Param`](3_Communication_Param) | 参数：声明、读取、运行时修改 |
 
 ---
 
@@ -37,6 +38,8 @@ ros2 run <包名> <程序名>
 | 方式 | 单向、持续 | 一问一答 | 交任务 → 报进度 → 拿结果 |
 | 接口文件 | `.msg`（1 段） | `.srv`（请求 `---` 响应） | `.action`（任务 `---` 结果 `---` 进度） |
 | 例子 | `/joint_states` | `/compute_fk` | `FollowJointTrajectory` |
+
+另外还有**参数（Parameter）**：存在每个节点内部的配置值，外部读写它底层走的是服务。
 
 ---
 
@@ -67,7 +70,7 @@ ros2 run action_demo_py countdown_server
 ros2 run action_demo_py countdown_client
 ```
 
-## 3 · 话题与服务
+## 3 · 通信机制：话题、服务、参数
 
 ### 话题（`3_Communication_Topic`）
 
@@ -127,6 +130,32 @@ rclpy.spin_until_future_complete(self, future)
 ```bash
 ros2 run py_service_pkg server
 ros2 run py_service_pkg client 2 3      # 计算结果: 5
+```
+
+### 参数（`3_Communication_Param`）
+
+![Param](3_Communication_Param/communication_param.png)
+
+参数是节点的配置项（比如速度、串口号）。ROS 2 没有全局参数服务器，**每个节点自己保存自己的参数**。
+
+```python
+self.declare_parameter('my_str', 'hello_world')     # 先声明（名字, 默认值），才能使用
+self.timer = self.create_timer(1.0, self.timer_callback)
+
+def timer_callback(self):
+    my_str = self.get_parameter('my_str').get_parameter_value().string_value
+    self.get_logger().info(f'my_str 的值是:{my_str}')
+```
+
+- 定时器每次都重新读取参数，所以外部一修改，下一秒的输出就变了
+- 外部读写参数，底层调用的是节点自带的服务（`ros2 service list` 能看到 `/param_node/set_parameters` 等）
+
+```bash
+ros2 run py_param_pkg param_node
+ros2 param list                                       # 列出所有节点的参数
+ros2 param get /param_node my_str                     # 读
+ros2 param set /param_node my_str 'modified value'    # 改：Set parameter successful
+ros2 run py_param_pkg param_node --ros-args -p my_str:=abc   # 启动时就指定参数值
 ```
 
 ---
