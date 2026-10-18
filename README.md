@@ -14,6 +14,7 @@ My ROS 2 learning notes and practice code, following Seeed Studio's ROS 2 beginn
 | 3 | [`3_Communication_Topic`](3_Communication_Topic) | 话题：发布者 + 订阅者 |
 | 3 | [`3_Communication_Srv`](3_Communication_Srv) | 服务：自定义 AddTwoInts |
 | 3 | [`3_Communication_Param`](3_Communication_Param) | 参数：声明、读取、运行时修改 |
+| 4 | [`4_Launch`](4_Launch) | Launch：一条命令启动多个节点、包含其他 launch |
 
 ---
 
@@ -160,12 +161,56 @@ ros2 run py_param_pkg param_node --ros-args -p my_str:=abc   # 启动时就指�
 
 ---
 
+## 4 · Launch（`4_Launch`）
+
+![Launch](4_Launch/4_Launch.png)
+
+launch 文件 = 自动帮你敲 `ros2 run` 的"待办清单"，一条 `ros2 launch` 同时启动多个程序。被启动的程序本身不变，`main()` 照常运行。
+
+本课两个 launch 文件：
+
+- `3_Communication_Srv/src/py_service_pkg/launch/add_two_ints.launch.py`：启动服务端 + 客户端，`a`、`b` 可从外部传入
+- `4_Launch/src/launch_demo/launch/bringup.launch.py`：**包含**上面那个（传入 a=7、b=8），再启动一只乌龟
+
+```python
+# bringup.launch.py 核心部分
+srv_launch = os.path.join(get_package_share_directory('py_service_pkg'), 'launch', 'add_two_ints.launch.py')
+
+return LaunchDescription([
+    IncludeLaunchDescription(PythonLaunchDescriptionSource(srv_launch),
+                             launch_arguments={'a': '7', 'b': '8'}.items()),
+    Node(package='turtlesim', executable='turtlesim_node',
+         name='sim', parameters=[{'background_r': 255}]),
+])
+```
+
+| launch 里的写法 | 等价的命令行 / 含义 |
+|---|---|
+| `package` + `executable` | `ros2 run 包 程序` |
+| `name='sim'` | `--ros-args -r __node:=sim`，覆盖代码里的节点名 |
+| `parameters=[{...}]` | `-p 名字:=值`，ROS 参数，程序用 `get_parameter` 读 |
+| `arguments=[...]` | 程序名后面的命令行参数，程序用 `sys.argv` 读 |
+| `DeclareLaunchArgument` / `LaunchConfiguration` | launch 文件自己的参数，命令行写 `a:=10` |
+
+- launch 文件要装进 share：`setup.py` 的 `data_files` 加 `(os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py'))`
+- `ros2 launch 包 文件`：到这个包的 share 目录里找该文件，执行它的 `generate_launch_description()`
+- 跨工作空间包含：先 source 被包含的工作空间，再编译当前工作空间，之后只 source 当前这个就行
+
+```bash
+source 3_Communication_Srv/install/setup.bash
+cd 4_Launch && colcon build && source install/setup.bash
+ros2 launch launch_demo bringup.launch.py       # 紫色背景的乌龟 + 计算结果: 15
+```
+
+---
+
 ## 要点速记
 
 - `rclpy.spin(node)` 会停在那一行；所有回调都靠 spin 家族来调用
 - 回调作为参数时只写函数名，不加括号：`callback=self.cb`
 - `self.a.f(x)`：点号前的对象自动传入；`rclpy.xxx(node, ...)` 这种模块函数要显式传节点
 - 检查接口：`ros2 interface show 包名/srv/类型名`；"找不到类型"通常是终端没 source
+- 容器里启动带窗口的程序时出现 `MESA` / `libGL error` 可以忽略，窗口照常显示
 - VS Code 找不到自定义接口：`settings.json` 的 `python.analysis.extraPaths` 里加 `<课名>/install/<接口包>/local/lib/python3.10/dist-packages`
 
 | 回调 | 收到 | 返回 |
