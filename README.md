@@ -15,6 +15,7 @@ My ROS 2 learning notes and practice code, following Seeed Studio's ROS 2 beginn
 | 3 | [`3_Communication_Srv`](3_Communication_Srv) | 服务：自定义 AddTwoInts |
 | 3 | [`3_Communication_Param`](3_Communication_Param) | 参数：声明、读取、运行时修改 |
 | 4 | [`4_Launch`](4_Launch) | Launch：一条命令启动多个节点、包含其他 launch |
+| 5 | [`5_TF`](5_TF) | TF 坐标变换：广播、监听、RViz 显示 |
 
 ---
 
@@ -201,6 +202,53 @@ source 3_Communication_Srv/install/setup.bash
 cd 4_Launch && colcon build && source install/setup.bash
 ros2 launch launch_demo bringup.launch.py       # 紫色背景的乌龟 + 计算结果: 15
 ```
+
+---
+
+## 5 · TF 坐标变换（`5_TF`）
+
+![TF](5_TF/TF.png)
+
+![RViz](5_TF/TF2.png)
+
+场景：`base_link`（机器人基座，不动）上装了一个 `radar_link`（雷达，在前方 1 m、高 0.5 m，绕 Z 轴一直转）。雷达看到正前方 2 m 有个点，求它在基座坐标系下的坐标。
+
+包 `learning_tf2`（依赖 `rclpy tf2_ros geometry_msgs`），两个程序：
+
+```python
+# broadcaster：每 0.1 秒发一次 base_link → radar_link 的变换
+self.tf_broadcaster = TransformBroadcaster(self)
+t = TransformStamped()
+t.header.frame_id = 'base_link'          # 父坐标系
+t.child_frame_id  = 'radar_link'         # 子坐标系
+t.transform.translation.x = 1.0          # 平移
+t.transform.rotation = ...               # 旋转（四元数，绕 Z 轴 = yaw）
+self.tf_broadcaster.sendTransform(t)
+
+# listener：把 radar_link 下的点换算到 base_link 下
+self.buffer = Buffer()
+self.listener = TransformListener(self.buffer, self)
+point.header.frame_id = 'radar_link'     # 这个点属于哪个坐标系
+base_point = self.buffer.transform(point, 'base_link')
+```
+
+- **TF 就是普通的话题**：`TransformBroadcaster` = 往 `/tf` 发布；`TransformListener` = 订阅 `/tf`，收到就存进 `Buffer`（默认保留 10 秒）
+- `lookup_transform` / `transform` 不是在接收，是**从 Buffer 里读**；`buffer.transform()` 内部会自己调用 `lookup_transform`
+- `lookup_transform` 会自动把多段变换串起来（A→B、B→C 能直接查 A→C）
+- 坐标系名字是自己起的字符串，两边要一致；约定俗成：`map`、`odom`、`base_link`
+- `import tf2_geometry_msgs` 不能删：它让 `buffer.transform()` 能处理 `PointStamped`
+- 要加 `try/except TransformException`：刚启动时 Buffer 里还没数据，会报 `frame does not exist`
+- 多台机器发**同一个**坐标系会冲突；`/tf` 是全局名称，命名空间隔不开
+
+```bash
+ros2 run learning_tf2 broadcaster
+ros2 run learning_tf2 listener
+ros2 run tf2_ros tf2_echo base_link radar_link    # 直接看变换数值
+ros2 run tf2_tools view_frames                    # 生成 frames.pdf，看 TF 树
+ros2 run tf2_ros static_transform_publisher 0 0 0.5 0 0 0 base_link camera_link   # 固定不动的用静态 TF
+```
+
+**RViz 显示**：`ros2 run rviz2 rviz2` → Fixed Frame 改成 `base_link` → Add → TF → 勾 Show Names。红绿蓝 = XYZ。RViz 只画收到的 TF；listener 里的点没发布出去，RViz 看不到。想看就发布到话题上（`PointStamped`），再 Add → By topic。
 
 ---
 
